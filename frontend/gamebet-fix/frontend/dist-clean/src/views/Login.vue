@@ -102,18 +102,28 @@ export default {
       this.error = null;
       
       try {
+        // Modifier pour utiliser email au lieu de username pour correspondre à l'API
         const { username, password, accountType } = this.form;
-        const result = await this.login({ username, password, accountType });
         
-        if (result.success) {
+        // Appeler l'action login avec les bonnes propriétés
+        const result = await this.login({ 
+          email: username, // Utiliser username comme email pour l'API
+          password, 
+          accountType 
+        });
+        
+        // Vérifier le résultat sans essayer d'accéder à result.data
+        if (result && result.success) {
           // Redirection vers la page d'accueil après connexion réussie
           this.$router.push('/');
         } else {
-          this.error = result.error || 'Nom d\'utilisateur ou mot de passe incorrect';
+          // Utiliser l'erreur du résultat ou un message par défaut
+          this.error = (result && result.error) || 'Nom d\'utilisateur ou mot de passe incorrect';
         }
       } catch (error) {
+        console.error('Erreur de connexion:', error);
+        // Message d'erreur générique en cas d'exception
         this.error = 'Une erreur est survenue lors de la connexion';
-        console.error(error);
       } finally {
         this.isSubmitting = false;
       }
