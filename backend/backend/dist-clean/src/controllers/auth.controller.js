@@ -1,4 +1,5 @@
 const User = require('../models/User.model');
+const Wallet = require('../models/Wallet.model'); // Assurez-vous que ce modèle existe
 const jwt = require('jsonwebtoken');
 const uuid = require('uuid');
 
@@ -19,12 +20,35 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'Ce nom d\'utilisateur est déjà pris' });
     }
 
-    // Créer un nouvel utilisateur
+    // Créer un nouvel utilisateur avec des statistiques initialisées à zéro
     user = new User({
       username,
       email,
       password,
-      userType
+      userType,
+      profilePicture: 'default-avatar.png',
+      bio: '',
+      socialLinks: {
+        twitch: '',
+        youtube: '',
+        twitter: '',
+        instagram: ''
+      },
+      following: [],
+      followers: [],
+      isStreaming: false,
+      stats: {
+        totalBets: 0,
+        wonBets: 0,
+        totalWagered: 0,
+        totalWon: 0,
+        totalStreams: 0,
+        totalStreamTime: 0,
+        totalViewers: 0,
+        winRate: 0
+      },
+      createdAt: Date.now(),
+      lastLogin: Date.now()
     });
 
     // Si c'est un streamer, générer une clé de stream
@@ -34,6 +58,16 @@ exports.register = async (req, res) => {
 
     // Sauvegarder l'utilisateur dans la base de données
     await user.save();
+
+    // Créer un portefeuille vide pour le nouvel utilisateur
+    const wallet = new Wallet({
+      userId: user._id,
+      balance: 0,
+      transactions: [] // Aucune transaction initiale
+    });
+    
+    // Sauvegarder le portefeuille dans la base de données
+    await wallet.save();
 
     // Générer un token JWT
     const token = user.generateAuthToken();
