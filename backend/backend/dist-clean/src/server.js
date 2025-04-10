@@ -2,27 +2,29 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const http = require('http');
+const http = require('http') ;
 const socketIo = require('socket.io');
 const routes = require('./routes');
-const { errorHandler } = require('./middleware/errorHandler');
+
+// Importation correcte du middleware errorHandler (sans déstructuration)
+const errorHandler = require('./middleware/errorHandler');
 
 // Initialisation de l'application Express
 const app = express();
-const server = http.createServer(app);
+const server = http.createServer(app) ;
 const io = socketIo(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:8080',
     methods: ['GET', 'POST'],
     credentials: true
   }
-});
+}) ;
 
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:8080',
   credentials: true
-}));
+}) );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -32,7 +34,7 @@ app.set('io', io);
 // Routes
 app.use('/api', routes);
 
-// Middleware de gestion des erreurs
+// Middleware de gestion des erreurs (utilisé correctement)
 app.use(errorHandler);
 
 // Connexion à la base de données MongoDB
@@ -64,7 +66,7 @@ io.on('connection', (socket) => {
 
 // Démarrage du serveur
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Serveur démarré sur le port ${PORT}`);
 });
 
