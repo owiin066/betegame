@@ -41,11 +41,11 @@
       <!-- Historique des paris -->
       <div v-if="activeTab === 'history'" class="tab-content">
         <h3>Historique des paris</h3>
-        <div v-if="bettingHistory.length === 0" class="empty-state">
+        <div v-if="userBettingHistory.length === 0" class="empty-state">
           Vous n'avez pas encore placé de paris.
         </div>
         <div v-else class="betting-history">
-          <div v-for="(bet, index) in bettingHistory" :key="index" class="bet-card">
+          <div v-for="(bet, index) in userBettingHistory" :key="index" class="bet-card">
             <div class="bet-header">
               <span class="streamer-name">{{ bet.streamerName }}</span>
               <span class="bet-date">{{ formatDate(bet.date) }}</span>
@@ -65,11 +65,11 @@
       <!-- Streamers suivis -->
       <div v-if="activeTab === 'followed'" class="tab-content">
         <h3>Streamers suivis</h3>
-        <div v-if="followedStreamers.length === 0" class="empty-state">
+        <div v-if="userFollowedStreamers.length === 0" class="empty-state">
           Vous ne suivez aucun streamer pour le moment.
         </div>
         <div v-else class="followed-streamers">
-          <div v-for="(streamer, index) in followedStreamers" :key="index" class="streamer-card">
+          <div v-for="(streamer, index) in userFollowedStreamers" :key="index" class="streamer-card">
             <div class="streamer-avatar">{{ streamer.name.charAt(0) }}</div>
             <div class="streamer-info">
               <h4>{{ streamer.name }}</h4>
@@ -135,7 +135,8 @@ export default {
   data() {
     return {
       activeTab: 'history',
-      bettingHistory: [
+      // Données de démonstration - ne seront utilisées que pour les comptes de démonstration
+      demoBettingHistory: [
         {
           streamerName: 'RisingSun',
           date: new Date(2025, 3, 5),
@@ -158,7 +159,7 @@ export default {
           status: 'Gagné'
         }
       ],
-      followedStreamers: [
+      demoFollowedStreamers: [
         {
           name: 'RisingSun',
           game: 'Fortnite',
@@ -182,7 +183,7 @@ export default {
         }
       ],
       settings: {
-        email: 'user@example.com',
+        email: '',
         notifications: {
           streamerLive: true,
           betResult: true,
@@ -209,6 +210,46 @@ export default {
     memberSince() {
       const date = this.user.createdAt ? new Date(this.user.createdAt) : new Date();
       return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+    },
+    // Vérifier si l'utilisateur est nouveau (inscrit aujourd'hui)
+    isNewUser() {
+      if (!this.user || !this.user.createdAt) return true;
+      
+      const createdDate = new Date(this.user.createdAt);
+      const today = new Date();
+      
+      // Vérifier si l'utilisateur s'est inscrit aujourd'hui
+      return (
+        createdDate.getDate() === today.getDate() &&
+        createdDate.getMonth() === today.getMonth() &&
+        createdDate.getFullYear() === today.getFullYear()
+      );
+    },
+    // Retourner un historique de paris vide pour les nouveaux utilisateurs
+    userBettingHistory() {
+      // Si c'est un nouvel utilisateur, retourner un tableau vide
+      if (this.isNewUser) {
+        return [];
+      }
+      
+      // Sinon, retourner les données de démonstration
+      return this.demoBettingHistory;
+    },
+    // Retourner une liste de streamers suivis vide pour les nouveaux utilisateurs
+    userFollowedStreamers() {
+      // Si c'est un nouvel utilisateur, retourner un tableau vide
+      if (this.isNewUser) {
+        return [];
+      }
+      
+      // Sinon, retourner les données de démonstration
+      return this.demoFollowedStreamers;
+    }
+  },
+  created() {
+    // Initialiser l'email avec celui de l'utilisateur connecté
+    if (this.user && this.user.email) {
+      this.settings.email = this.user.email;
     }
   },
   methods: {
