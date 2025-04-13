@@ -4,13 +4,17 @@
       <div class="hero-content">
         <h1>Pariez en direct sur vos streamers préférés</h1>
         <p>Des cotes en temps réel basées sur leurs performances</p>
-        <router-link to="/register" class="cta-button">Commencer à parier</router-link>
+        <router-link @click.native.prevent="handleCtaClick" class="cta-button">Commencer à parier</router-link>
       </div>
     </section>
     
-    <section class="live-streams-section">
+    <section v-if="hasLiveStreams || isLoading" class="live-streams-section">
       <h2>Streams en direct avec cotes en temps réel</h2>
-      <div class="streams-grid">
+      <div v-if="isLoading" class="loading-indicator">Chargement des streams en direct...</div>
+      <div v-else-if="!hasLiveStreams" class="empty-state">
+        Aucun stream en direct pour le moment. Revenez plus tard !
+      </div>
+      <div v-else class="streams-grid">
         <div v-for="(stream, index) in liveStreams" :key="index" class="stream-card">
           <div class="stream-preview">
             <span class="live-badge">LIVE</span>
@@ -77,9 +81,13 @@
       </div>
     </section>
     
-    <section class="popular-streamers-section">
+    <section v-if="hasPopularStreamers || isLoading" class="popular-streamers-section">
       <h2>Streamers populaires</h2>
-      <div class="streamers-grid">
+      <div v-if="isLoading" class="loading-indicator">Chargement des streamers populaires...</div>
+      <div v-else-if="!hasPopularStreamers" class="empty-state">
+        Aucun streamer populaire pour le moment.
+      </div>
+      <div v-else class="streamers-grid">
         <div v-for="(streamer, index) in popularStreamers" :key="index" class="streamer-card">
           <div class="streamer-avatar">
             <img :src="streamer.avatar" :alt="streamer.name" />
@@ -113,78 +121,46 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import axios from 'axios';
 
 export default {
   name: 'Home',
   data() {
     return {
-      liveStreams: [
-        {
-          streamerName: 'RisingSun',
-          game: 'Fortnite',
-          duration: '1:35',
-          thumbnail: 'https://via.placeholder.com/300x200/1a1333/ffffff?text=RisingSun',
-          odds: 1.75,
-          betAmount: null
-        },
-        {
-          streamerName: 'ShadowAcc',
-          game: 'Call of Duty',
-          duration: '2:10',
-          thumbnail: 'https://via.placeholder.com/300x200/1a1333/ffffff?text=ShadowAcc',
-          odds: 2.25,
-          betAmount: null
-        },
-        {
-          streamerName: 'JinMaster',
-          game: 'Valorant',
-          duration: '3:25',
-          thumbnail: 'https://via.placeholder.com/300x200/1a1333/ffffff?text=JinMaster',
-          odds: 1.45,
-          betAmount: null
-        }
-      ],
-      popularStreamers: [
-        {
-          name: 'RisingSun',
-          game: 'Fortnite',
-          avatar: 'https://via.placeholder.com/100/8c52ff/ffffff?text=R',
-          winRate: 66.7,
-          avgOdds: 1.75,
-          isLive: true
-        },
-        {
-          name: 'ShadowAcc',
-          game: 'Call of Duty',
-          avatar: 'https://via.placeholder.com/100/8c52ff/ffffff?text=S',
-          winRate: 58.3,
-          avgOdds: 2.25,
-          isLive: true
-        },
-        {
-          name: 'JinMaster',
-          game: 'Valorant',
-          avatar: 'https://via.placeholder.com/100/8c52ff/ffffff?text=J',
-          winRate: 72.1,
-          avgOdds: 1.45,
-          isLive: false
-        },
-        {
-          name: 'NightOwl',
-          game: 'League of Legends',
-          avatar: 'https://via.placeholder.com/100/8c52ff/ffffff?text=N',
-          winRate: 63.5,
-          avgOdds: 1.85,
-          isLive: false
-        }
-      ]
+      liveStreams: [], // Tableau vide au lieu des streams fictifs
+      popularStreamers: [], // Tableau vide au lieu des streamers fictifs
+      isLoading: true
     };
   },
   computed: {
-    ...mapGetters(['isAuthenticated'])
+    ...mapGetters(['isAuthenticated', 'currentUser']),
+    hasLiveStreams() {
+      return this.liveStreams && this.liveStreams.length > 0;
+    },
+    hasPopularStreamers() {
+      return this.popularStreamers && this.popularStreamers.length > 0;
+    }
   },
   methods: {
-    placeBet(stream) {
+    async fetchLiveStreams() {
+      try {
+        const response = await axios.get('/api/streams/live');
+        this.liveStreams = response.data || [];
+      } catch (error) {
+        console.error('Erreur lors de la récupération des streams en direct:', error);
+        this.liveStreams = [];
+      }
+    },
+    async fetchPopularStreamers() {
+      try {
+        const response = await axios.get('/api/streamers/popular');
+        this.popularStreamers = response.data || [];
+      } catch (error) {
+        console.error('Erreur lors de la récupération des streamers populaires:', error);
+        this.popularStreamers = [];
+      }
+    },
+    async placeBet(stream) {
       if (!this.isAuthenticated) {
         this.$router.push('/login');
         return;
@@ -195,10 +171,82 @@ export default {
         return;
       }
       
-      // Dans une implémentation réelle, ceci serait un appel API
-      alert(`Pari de ${stream.betAmount}€ placé sur ${stream.streamerName} avec une cote de ${stream.odds}`);
-      stream.betAmount = null;
+      try {
+        // Vérifier si l'utilisateur a un portefeuille avec des fonds
+        const walletResponse = await axios.get('/api/wallet', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        const balance = walletResponse.data?.balance || 0;
+        
+        if (balance < stream.betAmount) {
+          // Rediriger vers la page de crédit du portefeuille
+          this.$router.push('/wallet?tab=deposit');
+          alert('Solde insuffisant. Veuillez créditer votre compte.');
+          return;
+        }
+        
+        // Placer le pari
+        const response = await axios.post('/api/bets/place', {
+          streamerId: stream.streamerId,
+          amount: stream.betAmount,
+          odds: stream.odds
+        }, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (response.data && response.data.success) {
+          alert(`Pari de ${stream.betAmount}€ placé sur ${stream.streamerName} avec une cote de ${stream.odds}`);
+          stream.betAmount = null;
+        }
+      } catch (error) {
+        console.error('Erreur lors du placement du pari:', error);
+        alert('Une erreur est survenue lors du placement du pari.');
+      }
+    },
+    handleCtaClick() {
+      if (!this.isAuthenticated) {
+        // Si non connecté, rediriger vers l'inscription
+        this.$router.push('/register');
+        return;
+      }
+      
+      // Vérifier si l'utilisateur a un portefeuille avec des fonds
+      axios.get('/api/wallet', {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      }).then(response => {
+        const balance = response.data?.balance || 0;
+        
+        if (balance <= 0) {
+          // Rediriger vers la page de crédit du portefeuille
+          this.$router.push('/wallet?tab=deposit');
+        } else {
+          // Rediriger vers la page des streams en direct
+          this.$router.push('/streams');
+        }
+      }).catch(error => {
+        console.error('Erreur lors de la vérification du portefeuille:', error);
+        // En cas d'erreur, rediriger vers la page des streams
+        this.$router.push('/streams');
+      });
     }
+  },
+  async created() {
+    this.isLoading = true;
+    
+    // Charger les données réelles
+    await Promise.all([
+      this.fetchLiveStreams(),
+      this.fetchPopularStreamers()
+    ]);
+    
+    this.isLoading = false;
   }
 };
 </script>
@@ -495,5 +543,21 @@ h2 {
   margin-bottom: 2rem;
   color: #8c8a97;
   font-size: 1.2rem;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 2rem;
+  color: #8c8a97;
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #8c8a97;
+  background-color: #1a1333;
+  border-radius: 8px;
+  margin-bottom: 2rem;
 }
 </style>
