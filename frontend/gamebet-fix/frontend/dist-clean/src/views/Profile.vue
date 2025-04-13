@@ -1,126 +1,172 @@
 <template>
   <div class="profile-container">
     <div class="profile-header">
-      <div class="avatar-section">
-        <div class="avatar">
-          <!-- Placeholder pour l'avatar -->
-          <div class="avatar-placeholder">{{ userInitials }}</div>
+      <div class="profile-avatar">
+        <div class="avatar-circle">
+          <span>{{ userInitials }}</span>
         </div>
-        <h2>{{ user.username }}</h2>
-        <p>{{ userTypeLabel }}</p>
-        <p>Membre depuis {{ memberSince }}</p>
-        <button class="edit-profile-btn">Modifier le profil</button>
       </div>
       
-      <div class="profile-tabs">
-        <div 
-          class="tab" 
-          :class="{ active: activeTab === 'history' }"
-          @click="activeTab = 'history'"
-        >
-          Historique des paris
+      <div class="profile-info">
+        <h1>{{ user.username }}</h1>
+        <div class="profile-meta">
+          <span class="user-type">{{ userTypeLabel }}</span>
+          <span class="member-since">Membre depuis {{ memberSince }}</span>
         </div>
-        <div 
-          class="tab" 
-          :class="{ active: activeTab === 'followed' }"
-          @click="activeTab = 'followed'"
-        >
-          Streamers suivis
-        </div>
-        <div 
-          class="tab" 
-          :class="{ active: activeTab === 'settings' }"
-          @click="activeTab = 'settings'"
-        >
-          Paramètres
-        </div>
+        <button @click="activeTab = 'settings'" class="edit-profile-button">Modifier le profil</button>
       </div>
+    </div>
+    
+    <div class="profile-tabs">
+      <button 
+        @click="activeTab = 'history'" 
+        :class="{ active: activeTab === 'history' }"
+        class="tab-button"
+      >
+        Historique des paris
+      </button>
+      
+      <button 
+        @click="activeTab = 'streamers'" 
+        :class="{ active: activeTab === 'streamers' }"
+        class="tab-button"
+      >
+        Streamers suivis
+      </button>
+      
+      <button 
+        @click="activeTab = 'settings'" 
+        :class="{ active: activeTab === 'settings' }"
+        class="tab-button"
+      >
+        Paramètres
+      </button>
     </div>
     
     <div class="profile-content">
       <!-- Historique des paris -->
-      <div v-if="activeTab === 'history'" class="tab-content">
-        <h3>Historique des paris</h3>
-        <div v-if="userBettingHistory.length === 0" class="empty-state">
+      <div v-if="activeTab === 'history'" class="betting-history-tab">
+        <h2>Historique des paris</h2>
+        
+        <div v-if="isLoading.bettingHistory" class="loading-indicator">
+          Chargement de l'historique des paris...
+        </div>
+        <div v-else-if="bettingHistory.length === 0" class="empty-state">
           Vous n'avez pas encore placé de paris.
         </div>
         <div v-else class="betting-history">
-          <div v-for="(bet, index) in userBettingHistory" :key="index" class="bet-card">
+          <div v-for="(bet, index) in bettingHistory" :key="index" class="bet-card">
             <div class="bet-header">
-              <span class="streamer-name">{{ bet.streamerName }}</span>
+              <h3>{{ bet.streamerName }}</h3>
               <span class="bet-date">{{ formatDate(bet.date) }}</span>
             </div>
+            
             <div class="bet-details">
-              <div class="bet-amount">{{ bet.amount }} €</div>
-              <div class="bet-odds">Cote {{ bet.odds }}</div>
-              <div class="bet-potential">Gain potentiel: {{ (bet.amount * bet.odds).toFixed(2) }} €</div>
+              <div class="bet-amount">
+                <span class="label">Montant</span>
+                <span class="value">{{ bet.amount }} €</span>
+              </div>
+              
+              <div class="bet-odds">
+                <span class="label">Cote</span>
+                <span class="value">{{ bet.odds }}</span>
+              </div>
+              
+              <div class="bet-potential">
+                <span class="label">Gain potentiel</span>
+                <span class="value">{{ bet.potentialWin }} €</span>
+              </div>
             </div>
-            <div class="bet-status" :class="bet.status.toLowerCase()">
-              {{ bet.status }}
+            
+            <div class="bet-result" :class="{ 'won': bet.result === 'won', 'lost': bet.result === 'lost' }">
+              {{ bet.result === 'won' ? 'Gagné' : 'Perdu' }}
             </div>
           </div>
         </div>
       </div>
       
       <!-- Streamers suivis -->
-      <div v-if="activeTab === 'followed'" class="tab-content">
-        <h3>Streamers suivis</h3>
-        <div v-if="userFollowedStreamers.length === 0" class="empty-state">
+      <div v-if="activeTab === 'streamers'" class="followed-streamers-tab">
+        <h2>Streamers suivis</h2>
+        
+        <div v-if="isLoading.followedStreamers" class="loading-indicator">
+          Chargement des streamers suivis...
+        </div>
+        <div v-else-if="followedStreamers.length === 0" class="empty-state">
           Vous ne suivez aucun streamer pour le moment.
         </div>
         <div v-else class="followed-streamers">
-          <div v-for="(streamer, index) in userFollowedStreamers" :key="index" class="streamer-card">
-            <div class="streamer-avatar">{{ streamer.name.charAt(0) }}</div>
+          <div v-for="(streamer, index) in followedStreamers" :key="index" class="streamer-card">
+            <div class="streamer-avatar">
+              <img :src="streamer.avatar" :alt="streamer.name" />
+            </div>
+            
             <div class="streamer-info">
-              <h4>{{ streamer.name }}</h4>
-              <p>{{ streamer.game }}</p>
+              <h3>{{ streamer.name }}</h3>
+              <p class="streamer-game">{{ streamer.game }}</p>
               <div class="streamer-stats">
-                <span>{{ streamer.winRate }}% de victoires</span>
-                <span>Cote moyenne: {{ streamer.averageOdds }}</span>
+                <span class="win-rate">{{ streamer.winRate }}% de victoires</span>
+                <span class="avg-odds">Cote moyenne: {{ streamer.avgOdds }}</span>
               </div>
             </div>
-            <div class="streamer-status" :class="{ online: streamer.isLive }">
+            
+            <div class="streamer-status" :class="{ 'online': streamer.isLive }">
               {{ streamer.isLive ? 'En direct' : 'Hors ligne' }}
             </div>
+            
+            <button class="unfollow-button">Ne plus suivre</button>
           </div>
         </div>
       </div>
       
       <!-- Paramètres -->
-      <div v-if="activeTab === 'settings'" class="tab-content">
-        <h3>Paramètres du compte</h3>
-        <form class="settings-form">
+      <div v-if="activeTab === 'settings'" class="settings-tab">
+        <h2>Paramètres du compte</h2>
+        
+        <form @submit.prevent="saveSettings" class="settings-form">
           <div class="form-group">
             <label for="email">Email</label>
-            <input type="email" id="email" v-model="settings.email" />
+            <input 
+              id="email" 
+              v-model="settings.email" 
+              type="email" 
+              placeholder="Votre email"
+            />
           </div>
           
           <div class="form-group">
-            <label for="notifications">Notifications</label>
+            <label>Notifications</label>
             <div class="checkbox-group">
-              <div class="checkbox">
-                <input type="checkbox" id="notifyStreamerLive" v-model="settings.notifications.streamerLive" />
-                <label for="notifyStreamerLive">Quand un streamer suivi est en direct</label>
+              <div class="checkbox-item">
+                <input 
+                  id="notifyStreamerLive" 
+                  v-model="settings.notifications.streamerLive" 
+                  type="checkbox"
+                />
+                <label for="notifyStreamerLive">Streamer en direct</label>
               </div>
-              <div class="checkbox">
-                <input type="checkbox" id="notifyBetResult" v-model="settings.notifications.betResult" />
-                <label for="notifyBetResult">Résultats des paris</label>
+              
+              <div class="checkbox-item">
+                <input 
+                  id="notifyBetResult" 
+                  v-model="settings.notifications.betResult" 
+                  type="checkbox"
+                />
+                <label for="notifyBetResult">Résultat des paris</label>
               </div>
-              <div class="checkbox">
-                <input type="checkbox" id="notifyPromo" v-model="settings.notifications.promotions" />
-                <label for="notifyPromo">Promotions et événements spéciaux</label>
+              
+              <div class="checkbox-item">
+                <input 
+                  id="notifyPromotions" 
+                  v-model="settings.notifications.promotions" 
+                  type="checkbox"
+                />
+                <label for="notifyPromotions">Promotions et offres spéciales</label>
               </div>
             </div>
           </div>
           
-          <div class="form-group">
-            <label for="password">Changer le mot de passe</label>
-            <input type="password" id="currentPassword" placeholder="Mot de passe actuel" />
-            <input type="password" id="newPassword" placeholder="Nouveau mot de passe" />
-            <input type="password" id="confirmPassword" placeholder="Confirmer le nouveau mot de passe" />
-          </div>
-          
-          <button type="submit" class="save-settings-btn">Enregistrer les modifications</button>
+          <button type="submit" class="save-button">Enregistrer les modifications</button>
         </form>
       </div>
     </div>
@@ -129,59 +175,19 @@
 
 <script>
 import { mapGetters } from 'vuex';
+import axios from 'axios';
 
 export default {
   name: 'Profile',
   data() {
     return {
       activeTab: 'history',
-      // Données de démonstration - ne seront utilisées que pour les comptes de démonstration
-      demoBettingHistory: [
-        {
-          streamerName: 'RisingSun',
-          date: new Date(2025, 3, 5),
-          amount: 50,
-          odds: 1.75,
-          status: 'Gagné'
-        },
-        {
-          streamerName: 'ShadowAcc',
-          date: new Date(2025, 3, 4),
-          amount: 25,
-          odds: 2.25,
-          status: 'Perdu'
-        },
-        {
-          streamerName: 'JinMaster',
-          date: new Date(2025, 3, 3),
-          amount: 100,
-          odds: 1.45,
-          status: 'Gagné'
-        }
-      ],
-      demoFollowedStreamers: [
-        {
-          name: 'RisingSun',
-          game: 'Fortnite',
-          winRate: 66.7,
-          averageOdds: 1.75,
-          isLive: true
-        },
-        {
-          name: 'ShadowAcc',
-          game: 'Call of Duty',
-          winRate: 58.3,
-          averageOdds: 2.25,
-          isLive: true
-        },
-        {
-          name: 'JinMaster',
-          game: 'Valorant',
-          winRate: 72.1,
-          averageOdds: 1.45,
-          isLive: false
-        }
-      ],
+      bettingHistory: [], // Tableau vide au lieu des paris fictifs
+      followedStreamers: [], // Tableau vide au lieu des streamers fictifs
+      isLoading: {
+        bettingHistory: true,
+        followedStreamers: true
+      },
       settings: {
         email: '',
         notifications: {
@@ -197,7 +203,7 @@ export default {
     user() {
       return this.currentUser || {
         username: 'Utilisateur',
-        accountType: 'viewer',
+        userType: 'viewer',
         createdAt: new Date()
       };
     },
@@ -205,57 +211,77 @@ export default {
       return this.user.username ? this.user.username.charAt(0).toUpperCase() : 'U';
     },
     userTypeLabel() {
-      return this.user.accountType === 'streamer' ? 'Streamer' : 'Viewer';
+      return this.user.userType === 'streamer' ? 'Streamer' : 'Viewer';
     },
     memberSince() {
       const date = this.user.createdAt ? new Date(this.user.createdAt) : new Date();
       return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
-    },
-    // Vérifier si l'utilisateur est nouveau (inscrit aujourd'hui)
-    isNewUser() {
-      if (!this.user || !this.user.createdAt) return true;
-      
-      const createdDate = new Date(this.user.createdAt);
-      const today = new Date();
-      
-      // Vérifier si l'utilisateur s'est inscrit aujourd'hui
-      return (
-        createdDate.getDate() === today.getDate() &&
-        createdDate.getMonth() === today.getMonth() &&
-        createdDate.getFullYear() === today.getFullYear()
-      );
-    },
-    // Retourner un historique de paris vide pour les nouveaux utilisateurs
-    userBettingHistory() {
-      // Si c'est un nouvel utilisateur, retourner un tableau vide
-      if (this.isNewUser) {
-        return [];
-      }
-      
-      // Sinon, retourner les données de démonstration
-      return this.demoBettingHistory;
-    },
-    // Retourner une liste de streamers suivis vide pour les nouveaux utilisateurs
-    userFollowedStreamers() {
-      // Si c'est un nouvel utilisateur, retourner un tableau vide
-      if (this.isNewUser) {
-        return [];
-      }
-      
-      // Sinon, retourner les données de démonstration
-      return this.demoFollowedStreamers;
-    }
-  },
-  created() {
-    // Initialiser l'email avec celui de l'utilisateur connecté
-    if (this.user && this.user.email) {
-      this.settings.email = this.user.email;
     }
   },
   methods: {
     formatDate(date) {
-      return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+      return new Date(date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
+    },
+    async fetchBettingHistory() {
+      this.isLoading.bettingHistory = true;
+      
+      try {
+        const response = await axios.get('/api/bets/history', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        this.bettingHistory = response.data || [];
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'historique des paris:', error);
+        this.bettingHistory = [];
+      } finally {
+        this.isLoading.bettingHistory = false;
+      }
+    },
+    async fetchFollowedStreamers() {
+      this.isLoading.followedStreamers = true;
+      
+      try {
+        const response = await axios.get('/api/streamers/followed', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        this.followedStreamers = response.data || [];
+      } catch (error) {
+        console.error('Erreur lors de la récupération des streamers suivis:', error);
+        this.followedStreamers = [];
+      } finally {
+        this.isLoading.followedStreamers = false;
+      }
+    },
+    async saveSettings() {
+      try {
+        await axios.post('/api/user/settings', this.settings, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        alert('Paramètres enregistrés avec succès !');
+      } catch (error) {
+        console.error('Erreur lors de l\'enregistrement des paramètres:', error);
+        alert('Une erreur est survenue lors de l\'enregistrement des paramètres.');
+      }
     }
+  },
+  async created() {
+    // Initialiser l'email avec celui de l'utilisateur connecté
+    if (this.user && this.user.email) {
+      this.settings.email = this.user.email;
+    }
+    
+    // Charger les données réelles
+    this.fetchBettingHistory();
+    this.fetchFollowedStreamers();
   }
 };
 </script>
@@ -268,193 +294,222 @@ export default {
 
 .profile-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 2rem;
   background-color: #1a1333;
   border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 2rem;
-}
-
-.avatar-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   padding: 2rem;
 }
 
-.avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  overflow: hidden;
-  margin-bottom: 1rem;
+.profile-avatar {
+  flex-shrink: 0;
 }
 
-.avatar-placeholder {
-  width: 100%;
-  height: 100%;
+.avatar-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background-color: #8c52ff;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #8c52ff;
-  color: #ffffff;
   font-size: 3rem;
   font-weight: bold;
-}
-
-.edit-profile-btn {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  background-color: #8c52ff;
   color: #ffffff;
-  cursor: pointer;
 }
 
-.profile-tabs {
-  display: flex;
-  border-top: 1px solid #2c2541;
-}
-
-.tab {
+.profile-info {
   flex: 1;
-  padding: 1rem;
-  text-align: center;
+}
+
+.profile-info h1 {
+  margin: 0;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+}
+
+.profile-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  color: #8c8a97;
+}
+
+.user-type {
+  background-color: #2c2541;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.edit-profile-button {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: 1px solid #8c52ff;
+  color: #8c52ff;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.tab:hover {
-  background-color: #2c2541;
+.edit-profile-button:hover {
+  background-color: #8c52ff;
+  color: #ffffff;
 }
 
-.tab.active {
-  background-color: #2c2541;
-  border-bottom: 3px solid #8c52ff;
+.profile-tabs {
+  display: flex;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #2c2541;
 }
 
-.profile-content {
-  background-color: #1a1333;
-  border-radius: 8px;
-  padding: 2rem;
-}
-
-.tab-content h3 {
-  margin-bottom: 1.5rem;
-  color: #8c52ff;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem;
+.tab-button {
+  padding: 1rem 2rem;
+  background-color: transparent;
+  border: none;
   color: #8c8a97;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-button.active {
+  color: #8c52ff;
+  border-bottom-color: #8c52ff;
+}
+
+.profile-content h2 {
+  margin-top: 0;
+  margin-bottom: 2rem;
+  color: #ffffff;
 }
 
 .betting-history, .followed-streamers {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
 }
 
-.bet-card, .streamer-card {
-  background-color: #2c2541;
+.bet-card {
+  background-color: #1a1333;
   border-radius: 8px;
   padding: 1.5rem;
-  transition: transform 0.3s ease;
 }
 
-.bet-card:hover, .streamer-card:hover {
-  transform: translateY(-5px);
+.bet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
 }
 
-.bet-header, .streamer-info {
+.bet-header h3 {
+  margin: 0;
+  color: #ffffff;
+}
+
+.bet-date {
+  color: #8c8a97;
+  font-size: 0.9rem;
+}
+
+.bet-details {
   display: flex;
   justify-content: space-between;
   margin-bottom: 1rem;
 }
 
-.streamer-name, .bet-date {
+.bet-amount, .bet-odds, .bet-potential {
+  display: flex;
+  flex-direction: column;
+}
+
+.label {
+  color: #8c8a97;
   font-size: 0.9rem;
+  margin-bottom: 0.25rem;
 }
 
-.bet-details {
-  margin-bottom: 1rem;
-}
-
-.bet-amount {
-  font-size: 1.5rem;
+.value {
+  color: #ffffff;
   font-weight: bold;
-  margin-bottom: 0.5rem;
 }
 
-.bet-status {
+.bet-result {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 4px;
   font-weight: bold;
 }
 
-.bet-status.gagné {
+.bet-result.won {
   background-color: rgba(0, 255, 0, 0.1);
   color: #4caf50;
 }
 
-.bet-status.perdu {
+.bet-result.lost {
   background-color: rgba(255, 0, 0, 0.1);
   color: #f44336;
-}
-
-.bet-status.en.cours {
-  background-color: rgba(255, 165, 0, 0.1);
-  color: #ff9800;
 }
 
 .streamer-card {
   display: flex;
   align-items: center;
   gap: 1rem;
+  background-color: #1a1333;
+  border-radius: 8px;
+  padding: 1.5rem;
 }
 
 .streamer-avatar {
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
-  background-color: #8c52ff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
+  overflow: hidden;
+}
+
+.streamer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .streamer-info {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 
-.streamer-info h4 {
+.streamer-info h3 {
   margin: 0;
+  margin-bottom: 0.25rem;
+  color: #ffffff;
 }
 
-.streamer-info p {
-  margin: 0;
+.streamer-game {
   color: #8c8a97;
+  margin-bottom: 0.5rem;
 }
 
 .streamer-stats {
   display: flex;
-  gap: 1rem;
+  flex-direction: column;
   font-size: 0.8rem;
 }
 
+.win-rate {
+  color: #4caf50;
+}
+
+.avg-odds {
+  color: #8c52ff;
+}
+
 .streamer-status {
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 4px;
-  font-size: 0.8rem;
   background-color: #2c2541;
   color: #8c8a97;
+  font-size: 0.8rem;
+  margin-right: 1rem;
 }
 
 .streamer-status.online {
@@ -462,24 +517,40 @@ export default {
   color: #4caf50;
 }
 
+.unfollow-button {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  border: 1px solid #f44336;
+  color: #f44336;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.unfollow-button:hover {
+  background-color: #f44336;
+  color: #ffffff;
+}
+
 .settings-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  background-color: #1a1333;
+  border-radius: 8px;
+  padding: 2rem;
 }
 
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
   font-weight: bold;
 }
 
-.form-group input[type="email"],
-.form-group input[type="password"] {
+.form-group input[type="email"] {
+  width: 100%;
   padding: 0.75rem;
   border: none;
   border-radius: 4px;
@@ -493,20 +564,44 @@ export default {
   gap: 0.5rem;
 }
 
-.checkbox {
+.checkbox-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.save-settings-btn {
-  padding: 0.75rem;
-  border: none;
-  border-radius: 4px;
+.checkbox-item label {
+  margin-bottom: 0;
+  font-weight: normal;
+}
+
+.save-button {
+  padding: 0.75rem 1.5rem;
   background-color: #8c52ff;
+  border: none;
   color: #ffffff;
-  font-weight: bold;
+  border-radius: 4px;
   cursor: pointer;
-  align-self: flex-start;
+  transition: background-color 0.3s ease;
+}
+
+.save-button:hover {
+  background-color: #7b45e0;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 2rem;
+  color: #8c8a97;
+  font-style: italic;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #8c8a97;
+  background-color: #1a1333;
+  border-radius: 8px;
+  margin-bottom: 2rem;
 }
 </style>
