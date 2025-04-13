@@ -9,12 +9,12 @@
     
     <form @submit.prevent="handleLogin" class="login-form">
       <div class="form-group">
-        <label for="username">Nom d'utilisateur</label>
+        <label for="username">Nom d'utilisateur ou Email</label>
         <input 
           id="username" 
           v-model="form.username" 
           type="text" 
-          placeholder="Votre nom d'utilisateur"
+          placeholder="Votre nom d'utilisateur ou email"
           required
         />
       </div>
@@ -102,35 +102,44 @@ export default {
       this.error = null;
       
       try {
-        // Utiliser directement email au lieu de username
         const { username, password, accountType } = this.form;
         
-        // Forcer une simulation de connexion réussie sans appel API
-        // Cela contourne complètement le problème de structure de données
+        // Déterminer si l'entrée est un email ou un nom d'utilisateur
+        const isEmail = username.includes('@');
         
-        // Stocker les données dans localStorage
-        const fakeUser = {
-          id: Date.now(),
-          username: username,
-          email: username, // Utiliser username comme email
-          userType: accountType
+        // Préparer les données de connexion
+        const loginData = {
+          password,
+          accountType
         };
         
-        const fakeToken = 'token-' + Date.now();
+        // Ajouter soit email soit username selon le format détecté
+        if (isEmail) {
+          loginData.email = username;
+        } else {
+          loginData.username = username;
+        }
         
-        localStorage.setItem('token', fakeToken);
-        localStorage.setItem('user', JSON.stringify(fakeUser));
+        const result = await this.login(loginData);
         
-        // Mettre à jour le store via commit direct
-        this.$store.commit('SET_TOKEN', fakeToken);
-        this.$store.commit('SET_USER', fakeUser);
-        
-        // Redirection vers la page d'accueil après connexion réussie
-        this.$router.push('/');
-        
+        if (result.success) {
+          // Vérifier si l'utilisateur a un portefeuille avec des fonds
+          const user = this.$store.getters.currentUser;
+          
+          // Redirection basée sur l'état du portefeuille
+          if (user && user.hasWallet && user.walletBalance > 0) {
+            // Rediriger vers la page des streams en direct
+            this.$router.push('/streams');
+          } else {
+            // Rediriger vers la page de crédit du portefeuille
+            this.$router.push('/wallet?tab=deposit');
+          }
+        } else {
+          this.error = result.error || 'Nom d\'utilisateur ou mot de passe incorrect';
+        }
       } catch (error) {
-        console.error('Erreur de connexion:', error);
         this.error = 'Une erreur est survenue lors de la connexion';
+        console.error(error);
       } finally {
         this.isSubmitting = false;
       }
