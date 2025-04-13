@@ -122,8 +122,9 @@ export default new Vuex.Store({
       // Mettre à jour le store
       commit('CLEAR_AUTH');
       
-      // Rediriger vers la page de connexion
-      router.push('/login');
+      // Rediriger vers la page de connexion sans utiliser router
+      // Utiliser window.location pour la redirection au lieu de router.push
+      window.location.href = '/login';
     },
     
     checkAuth({ commit, state }) {
