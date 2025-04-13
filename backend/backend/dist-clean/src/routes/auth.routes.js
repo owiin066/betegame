@@ -28,13 +28,7 @@ router.post(
   authController.login
 );
 
-// Route pour obtenir l'utilisateur actuel
-router.get('/me', authController.getMe);
-
-// Route de déconnexion
-router.post('/logout', authController.logout);
-
-// Route pour rafraîchir le token
-router.post('/refresh-token', authController.refreshToken);
+// Route pour obtenir le profil de l'utilisateur actuel
+router.get('/me', authController.getUserProfile);
 
 module.exports = router;
