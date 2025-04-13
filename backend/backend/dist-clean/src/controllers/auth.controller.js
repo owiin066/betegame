@@ -1,31 +1,37 @@
 const User = require('../models/User.model');
-const Wallet = require('../models/Wallet.model'); // Assurez-vous que ce modèle existe
+const Wallet = require('../models/Wallet.model');
 const jwt = require('jsonwebtoken');
-const uuid = require('uuid');
+const bcrypt = require('bcryptjs');
+const config = require('../config/auth.config');
 
-// Contrôleur pour l'inscription
+// Fonction d'inscription
 exports.register = async (req, res) => {
   try {
+    // Récupérer les données du formulaire d'inscription
     const { username, email, password, userType } = req.body;
-
+    
     // Vérifier si l'utilisateur existe déjà
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: 'Cet utilisateur existe déjà' });
+    const existingUser = await User.findOne({ 
+      $or: [
+        { username: username },
+        { email: email }
+      ]
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({ 
+        success: false,
+        message: "L'utilisateur existe déjà" 
+      });
     }
-
-    // Vérifier si le nom d'utilisateur est déjà pris
-    user = await User.findOne({ username });
-    if (user) {
-      return res.status(400).json({ message: 'Ce nom d\'utilisateur est déjà pris' });
-    }
-
+    
     // Créer un nouvel utilisateur avec des statistiques initialisées à zéro
-    user = new User({
+    const user = new User({
       username,
       email,
-      password,
-      userType,
+      password: bcrypt.hashSync(password, 8),
+      userType: userType || 'viewer',
+      createdAt: new Date(),
       profilePicture: 'default-avatar.png',
       bio: '',
       socialLinks: {
@@ -36,7 +42,6 @@ exports.register = async (req, res) => {
       },
       following: [],
       followers: [],
-      isStreaming: false,
       stats: {
         totalBets: 0,
         wonBets: 0,
@@ -46,19 +51,12 @@ exports.register = async (req, res) => {
         totalStreamTime: 0,
         totalViewers: 0,
         winRate: 0
-      },
-      createdAt: Date.now(),
-      lastLogin: Date.now()
+      }
     });
-
-    // Si c'est un streamer, générer une clé de stream
-    if (userType === 'streamer') {
-      user.generateStreamKey();
-    }
-
+    
     // Sauvegarder l'utilisateur dans la base de données
     await user.save();
-
+    
     // Créer un portefeuille vide pour le nouvel utilisateur
     const wallet = new Wallet({
       userId: user._id,
@@ -66,124 +64,237 @@ exports.register = async (req, res) => {
       transactions: [] // Aucune transaction initiale
     });
     
-    // Sauvegarder le portefeuille dans la base de données
     await wallet.save();
-
+    
     // Générer un token JWT
-    const token = user.generateAuthToken();
-
-    // Renvoyer le token et les informations de l'utilisateur
+    const token = jwt.sign({ id: user._id }, config.secret, {
+      expiresIn: 86400 // 24 heures
+    });
+    
+    // Renvoyer les informations de l'utilisateur et le token
     res.status(201).json({
-      token,
+      success: true,
+      message: "Utilisateur enregistré avec succès",
       user: {
-        id: user.id,
+        id: user._id,
         username: user.username,
         email: user.email,
-        userType: user.userType
-      }
+        userType: user.userType,
+        createdAt: user.createdAt
+      },
+      token: token
     });
-  } catch (err) {
-    console.error('Erreur lors de l\'inscription:', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+  } catch (error) {
+    console.error("Erreur lors de l'inscription:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Une erreur est survenue lors de l'inscription" 
+    });
   }
 };
 
-// Contrôleur pour la connexion
+// Fonction de connexion
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    // Vérifier si l'utilisateur existe
-    const user = await User.findOne({ email });
+    // Récupérer les données du formulaire de connexion
+    const { username, email, password, userType } = req.body;
+    
+    // Rechercher l'utilisateur par nom d'utilisateur ou email
+    const user = await User.findOne({
+      $or: [
+        { username: username },
+        { email: email }
+      ]
+    });
+    
     if (!user) {
-      return res.status(400).json({ message: 'Identifiants invalides' });
+      return res.status(404).json({ 
+        success: false,
+        message: "Utilisateur non trouvé" 
+      });
     }
-
+    
+    // Vérifier si le type de compte correspond
+    if (user.userType !== userType) {
+      return res.status(403).json({
+        success: false,
+        message: "Type de compte incorrect. Veuillez vous connecter avec le bon type de compte."
+      });
+    }
+    
     // Vérifier le mot de passe
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Identifiants invalides' });
+    const passwordIsValid = bcrypt.compareSync(password, user.password);
+    
+    if (!passwordIsValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Mot de passe incorrect"
+      });
     }
-
-    // Mettre à jour la date de dernière connexion
-    user.lastLogin = Date.now();
-    await user.save();
-
+    
+    // Récupérer le portefeuille de l'utilisateur
+    const wallet = await Wallet.findOne({ userId: user._id });
+    
     // Générer un token JWT
-    const token = user.generateAuthToken();
-
-    // Renvoyer le token et les informations de l'utilisateur
-    res.json({
-      token,
+    const token = jwt.sign({ id: user._id }, config.secret, {
+      expiresIn: 86400 // 24 heures
+    });
+    
+    // Renvoyer les informations de l'utilisateur et le token
+    res.status(200).json({
+      success: true,
+      message: "Connexion réussie",
       user: {
-        id: user.id,
+        id: user._id,
         username: user.username,
         email: user.email,
-        userType: user.userType
+        userType: user.userType,
+        createdAt: user.createdAt,
+        hasWallet: !!wallet,
+        walletBalance: wallet ? wallet.balance : 0
+      },
+      token: token
+    });
+  } catch (error) {
+    console.error("Erreur lors de la connexion:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Une erreur est survenue lors de la connexion" 
+    });
+  }
+};
+
+// Fonction pour récupérer les informations de l'utilisateur connecté
+exports.getUserProfile = async (req, res) => {
+  try {
+    // Récupérer l'ID de l'utilisateur à partir du token JWT
+    const userId = req.userId;
+    
+    // Rechercher l'utilisateur dans la base de données
+    const user = await User.findById(userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Utilisateur non trouvé" 
+      });
+    }
+    
+    // Récupérer le portefeuille de l'utilisateur
+    const wallet = await Wallet.findOne({ userId: user._id });
+    
+    // Renvoyer les informations de l'utilisateur
+    res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        userType: user.userType,
+        createdAt: user.createdAt,
+        profilePicture: user.profilePicture,
+        bio: user.bio,
+        socialLinks: user.socialLinks,
+        following: user.following,
+        followers: user.followers,
+        stats: user.stats,
+        hasWallet: !!wallet,
+        walletBalance: wallet ? wallet.balance : 0
       }
     });
-  } catch (err) {
-    console.error('Erreur lors de la connexion:', err.message);
-    res.status(500).json({ message: 'Erreur serveur' });
+  } catch (error) {
+    console.error("Erreur lors de la récupération du profil:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Une erreur est survenue lors de la récupération du profil" 
+    });
   }
 };
 
-// Contrôleur pour obtenir l'utilisateur actuel
-exports.getMe = async (req, res) => {
+// Fonction pour mettre à jour le profil de l'utilisateur
+exports.updateUserProfile = async (req, res) => {
   try {
-    // Vérifier si le token est présent dans les headers
-    const token = req.header('x-auth-token');
-    if (!token) {
-      return res.status(401).json({ message: 'Aucun token, autorisation refusée' });
-    }
-
-    // Vérifier le token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'gamebet_secret_key');
+    // Récupérer l'ID de l'utilisateur à partir du token JWT
+    const userId = req.userId;
     
-    // Trouver l'utilisateur
-    const user = await User.findById(decoded.id).select('-password');
-    if (!user) {
-      return res.status(401).json({ message: 'Token invalide' });
+    // Récupérer les données du formulaire de mise à jour
+    const { bio, socialLinks } = req.body;
+    
+    // Mettre à jour l'utilisateur dans la base de données
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { 
+        bio: bio,
+        socialLinks: socialLinks
+      },
+      { new: true }
+    ).select('-password');
+    
+    if (!updatedUser) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Utilisateur non trouvé" 
+      });
     }
     
-    res.json(user);
-  } catch (err) {
-    console.error('Erreur lors de la récupération de l\'utilisateur:', err.message);
-    res.status(401).json({ message: 'Token invalide' });
+    // Renvoyer les informations de l'utilisateur mises à jour
+    res.status(200).json({
+      success: true,
+      message: "Profil mis à jour avec succès",
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour du profil:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Une erreur est survenue lors de la mise à jour du profil" 
+    });
   }
 };
 
-// Contrôleur pour la déconnexion
-exports.logout = (req, res) => {
-  // Dans une implémentation JWT, la déconnexion se fait côté client
-  // en supprimant le token, mais nous pouvons ajouter une logique supplémentaire ici
-  res.json({ message: 'Déconnexion réussie' });
-};
-
-// Contrôleur pour rafraîchir le token
-exports.refreshToken = async (req, res) => {
+// Fonction pour changer le mot de passe
+exports.changePassword = async (req, res) => {
   try {
-    // Vérifier si le token est présent dans les headers
-    const token = req.header('x-auth-token');
-    if (!token) {
-      return res.status(401).json({ message: 'Aucun token, autorisation refusée' });
-    }
-
-    // Vérifier le token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'gamebet_secret_key');
+    // Récupérer l'ID de l'utilisateur à partir du token JWT
+    const userId = req.userId;
     
-    // Trouver l'utilisateur
-    const user = await User.findById(decoded.id).select('-password');
+    // Récupérer les données du formulaire de changement de mot de passe
+    const { currentPassword, newPassword } = req.body;
+    
+    // Rechercher l'utilisateur dans la base de données
+    const user = await User.findById(userId);
+    
     if (!user) {
-      return res.status(401).json({ message: 'Token invalide' });
+      return res.status(404).json({ 
+        success: false,
+        message: "Utilisateur non trouvé" 
+      });
     }
     
-    // Générer un nouveau token
-    const newToken = user.generateAuthToken();
+    // Vérifier le mot de passe actuel
+    const passwordIsValid = bcrypt.compareSync(currentPassword, user.password);
     
-    res.json({ token: newToken });
-  } catch (err) {
-    console.error('Erreur lors du rafraîchissement du token:', err.message);
-    res.status(401).json({ message: 'Token invalide' });
+    if (!passwordIsValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Mot de passe actuel incorrect"
+      });
+    }
+    
+    // Mettre à jour le mot de passe
+    user.password = bcrypt.hashSync(newPassword, 8);
+    await user.save();
+    
+    // Renvoyer un message de succès
+    res.status(200).json({
+      success: true,
+      message: "Mot de passe changé avec succès"
+    });
+  } catch (error) {
+    console.error("Erreur lors du changement de mot de passe:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Une erreur est survenue lors du changement de mot de passe" 
+    });
   }
 };
