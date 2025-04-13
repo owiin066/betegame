@@ -14,7 +14,7 @@
           id="username" 
           v-model="form.username" 
           type="text" 
-          placeholder="Votre nom d'utilisateur"
+          placeholder="Choisissez un nom d'utilisateur"
           required
         />
       </div>
@@ -25,7 +25,7 @@
           id="email" 
           v-model="form.email" 
           type="email" 
-          placeholder="votre-email@example.com"
+          placeholder="Votre adresse email"
           required
         />
       </div>
@@ -36,7 +36,7 @@
           id="password" 
           v-model="form.password" 
           type="password" 
-          placeholder="Votre mot de passe"
+          placeholder="Choisissez un mot de passe"
           required
         />
       </div>
@@ -52,7 +52,7 @@
         />
       </div>
       
-      <div class="form-group">
+      <div class="form-group account-type">
         <label>Type de compte</label>
         <div class="account-type-options">
           <div 
@@ -81,23 +81,15 @@
         </div>
       </div>
       
-      <div class="form-group terms-checkbox">
-        <input 
-          id="termsAccepted" 
-          v-model="form.termsAccepted" 
-          type="checkbox"
-          required
-        />
+      <div class="form-group terms">
+        <input id="termsAccepted" v-model="form.termsAccepted" type="checkbox" required />
         <label for="termsAccepted">
-          J'accepte les 
-          <router-link to="/terms">conditions d'utilisation</router-link> 
-          et la 
-          <router-link to="/privacy">politique de confidentialité</router-link>
+          J'accepte les <a href="#" @click.prevent="showTerms">conditions d'utilisation</a> et la <a href="#" @click.prevent="showPrivacy">politique de confidentialité</a>
         </label>
       </div>
       
-      <button type="submit" class="submit-button" :disabled="isSubmitting">
-        {{ isSubmitting ? 'Création en cours...' : 'Créer un compte' }}
+      <button type="submit" class="submit-button" :disabled="isSubmitting || !isFormValid">
+        {{ isSubmitting ? 'Inscription en cours...' : 'Créer un compte' }}
       </button>
     </form>
     
@@ -127,17 +119,26 @@ export default {
       isSubmitting: false
     };
   },
+  computed: {
+    isFormValid() {
+      return (
+        this.form.username &&
+        this.form.email &&
+        this.form.password &&
+        this.form.password === this.form.confirmPassword &&
+        this.form.termsAccepted
+      );
+    }
+  },
   methods: {
     ...mapActions(['register']),
     async handleRegister() {
-      // Validation
-      if (this.form.password !== this.form.confirmPassword) {
-        this.error = 'Les mots de passe ne correspondent pas';
-        return;
-      }
-      
-      if (!this.form.termsAccepted) {
-        this.error = 'Vous devez accepter les conditions d\'utilisation';
+      if (!this.isFormValid) {
+        if (this.form.password !== this.form.confirmPassword) {
+          this.error = 'Les mots de passe ne correspondent pas';
+        } else {
+          this.error = 'Veuillez remplir tous les champs obligatoires';
+        }
         return;
       }
       
@@ -147,15 +148,14 @@ export default {
       try {
         const { username, email, password, accountType } = this.form;
         
-        // Modifier pour utiliser userType au lieu de accountType pour correspondre à l'API
+        // Envoyer les données d'inscription avec le type de compte correct
         const result = await this.register({ 
           username, 
           email, 
           password, 
-          userType: accountType // Renommer accountType en userType pour l'API
+          userType: accountType // Utiliser userType au lieu de accountType pour l'API
         });
         
-        // Vérifier le résultat sans essayer d'accéder à des propriétés qui pourraient ne pas exister
         if (result && result.success) {
           // Redirection vers la page de connexion après inscription réussie
           this.$router.push('/login');
@@ -172,6 +172,12 @@ export default {
       } finally {
         this.isSubmitting = false;
       }
+    },
+    showTerms() {
+      alert('Les conditions d\'utilisation seront affichées ici.');
+    },
+    showPrivacy() {
+      alert('La politique de confidentialité sera affichée ici.');
     }
   }
 };
@@ -253,6 +259,7 @@ input[type="password"] {
 
 .account-type-details h3 {
   margin: 0;
+  margin-bottom: 0.25rem;
   font-size: 1rem;
 }
 
@@ -262,13 +269,18 @@ input[type="password"] {
   color: #8c8a97;
 }
 
-.terms-checkbox {
+.terms {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
 }
 
-.terms-checkbox a {
+.terms label {
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.terms a {
   color: #8c52ff;
   text-decoration: none;
 }
