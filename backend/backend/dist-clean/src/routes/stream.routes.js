@@ -50,6 +50,33 @@ router.put(
   streamController.updateStream
 );
 
+// Ouvrir les paris sur un stream
+router.post(
+  '/:id/betting/open',
+  [
+    auth,
+    streamerOnly,
+    check('odds', 'Les cotes doivent être un nombre positif').optional().isFloat({ min: 1.0 })
+  ],
+  validateRequest,
+  streamController.openBetting
+);
+
+// Fermer les paris sur un stream
+router.post('/:id/betting/close', [auth, streamerOnly], streamController.closeBetting);
+
+// Définir le résultat d'un stream
+router.post(
+  '/:id/result',
+  [
+    auth,
+    streamerOnly,
+    check('result', 'Le résultat doit être "win" ou "lose"').isIn(['win', 'lose'])
+  ],
+  validateRequest,
+  streamController.setStreamResult
+);
+
 // Obtenir l'historique des streams d'un streamer
 router.get('/history', [auth, streamerOnly], streamController.getStreamHistory);
 
