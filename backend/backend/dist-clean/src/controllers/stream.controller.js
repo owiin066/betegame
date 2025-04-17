@@ -114,7 +114,8 @@ exports.startStream = async (req, res) => {
       game,
       description: description || '',
       startTime: Date.now(),
-      isLive: true
+      isLive: true,
+      streamKey: user.streamKey
     });
 
     await newStream.save();
@@ -244,6 +245,134 @@ exports.updateStream = async (req, res) => {
     res.json(stream);
   } catch (err) {
     console.error('Erreur lors de la mise à jour du stream:', err.message);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Contrôleur pour ouvrir les paris sur un stream
+exports.openBetting = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const streamId = req.params.id;
+    const { odds } = req.body;
+
+    // Vérifier si l'ID est valide
+    if (!mongoose.Types.ObjectId.isValid(streamId)) {
+      return res.status(400).json({ message: 'ID stream invalide' });
+    }
+
+    // Trouver le stream
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ message: 'Stream non trouvé' });
+    }
+
+    // Vérifier si l'utilisateur est le propriétaire du stream
+    if (stream.streamer.toString() !== userId) {
+      return res.status(403).json({ message: 'Accès refusé. Vous n\'êtes pas le propriétaire de ce stream.' });
+    }
+
+    // Vérifier si le stream est en direct
+    if (!stream.isLive) {
+      return res.status(400).json({ message: 'Impossible d\'ouvrir les paris sur un stream terminé' });
+    }
+
+    // Ouvrir les paris
+    await stream.openBetting(odds);
+
+    // Notifier les spectateurs via Socket.io
+    const io = req.app.get('io');
+    io.to(`stream-${streamId}`).emit('betting-opened', {
+      streamId: stream._id,
+      odds: stream.currentOdds
+    });
+
+    res.json({ message: 'Paris ouverts avec succès', stream });
+  } catch (err) {
+    console.error('Erreur lors de l\'ouverture des paris:', err.message);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Contrôleur pour fermer les paris sur un stream
+exports.closeBetting = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const streamId = req.params.id;
+
+    // Vérifier si l'ID est valide
+    if (!mongoose.Types.ObjectId.isValid(streamId)) {
+      return res.status(400).json({ message: 'ID stream invalide' });
+    }
+
+    // Trouver le stream
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ message: 'Stream non trouvé' });
+    }
+
+    // Vérifier si l'utilisateur est le propriétaire du stream
+    if (stream.streamer.toString() !== userId) {
+      return res.status(403).json({ message: 'Accès refusé. Vous n\'êtes pas le propriétaire de ce stream.' });
+    }
+
+    // Vérifier si le stream est en direct
+    if (!stream.isLive) {
+      return res.status(400).json({ message: 'Impossible de fermer les paris sur un stream terminé' });
+    }
+
+    // Fermer les paris
+    await stream.closeBetting();
+
+    // Notifier les spectateurs via Socket.io
+    const io = req.app.get('io');
+    io.to(`stream-${streamId}`).emit('betting-closed', {
+      streamId: stream._id
+    });
+
+    res.json({ message: 'Paris fermés avec succès', stream });
+  } catch (err) {
+    console.error('Erreur lors de la fermeture des paris:', err.message);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Contrôleur pour définir le résultat d'un stream
+exports.setStreamResult = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const streamId = req.params.id;
+    const { result } = req.body;
+
+    // Vérifier si l'ID est valide
+    if (!mongoose.Types.ObjectId.isValid(streamId)) {
+      return res.status(400).json({ message: 'ID stream invalide' });
+    }
+
+    // Trouver le stream
+    const stream = await Stream.findById(streamId);
+    if (!stream) {
+      return res.status(404).json({ message: 'Stream non trouvé' });
+    }
+
+    // Vérifier si l'utilisateur est le propriétaire du stream
+    if (stream.streamer.toString() !== userId) {
+      return res.status(403).json({ message: 'Accès refusé. Vous n\'êtes pas le propriétaire de ce stream.' });
+    }
+
+    // Définir le résultat
+    await stream.setResult(result);
+
+    // Notifier les spectateurs via Socket.io
+    const io = req.app.get('io');
+    io.to(`stream-${streamId}`).emit('result-set', {
+      streamId: stream._id,
+      result: stream.result
+    });
+
+    res.json({ message: 'Résultat défini avec succès', stream });
+  } catch (err) {
+    console.error('Erreur lors de la définition du résultat:', err.message);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
