@@ -66,6 +66,10 @@ const StreamSchema = new mongoose.Schema({
     enum: ['win', 'lose', 'pending'],
     default: 'pending'
   },
+  streamKey: {
+    type: String,
+    unique: true
+  },
   tags: [{
     type: String,
     trim: true
